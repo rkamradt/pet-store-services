@@ -1,0 +1,357 @@
+{
+  "project": "pet-store",
+  "generated": "2025-01-01T00:00:00Z",
+  "services": [
+    {
+      "id": "product-catalog",
+      "name": "ProductCatalog",
+      "archetype": "http",
+      "tech": "Spring Boot",
+      "purpose": "Owns all product data including name, description, category, pricing, and images for the pet shop catalog",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/products",
+          "description": "List all products with optional filtering by category"
+        },
+        {
+          "method": "GET",
+          "path": "/products/{id}",
+          "description": "Get a single product by ID"
+        },
+        {
+          "method": "POST",
+          "path": "/products",
+          "description": "Create a new product"
+        },
+        {
+          "method": "PUT",
+          "path": "/products/{id}",
+          "description": "Update an existing product"
+        },
+        {
+          "method": "DELETE",
+          "path": "/products/{id}",
+          "description": "Remove a product from the catalog"
+        }
+      ],
+      "publishes": [
+        {
+          "event": "product.created",
+          "description": "Emitted when a new product is added to the catalog"
+        },
+        {
+          "event": "product.updated",
+          "description": "Emitted when a product's details or price change"
+        },
+        {
+          "event": "product.deleted",
+          "description": "Emitted when a product is removed from the catalog"
+        }
+      ],
+      "accepts": [],
+      "dependsOn": []
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "archetype": "http",
+      "tech": "Spring Boot",
+      "purpose": "Owns stock levels per product, processes stock decrements on order placement, and raises low-stock alerts",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/inventory/{productId}",
+          "description": "Get current stock level for a product"
+        },
+        {
+          "method": "PUT",
+          "path": "/inventory/{productId}",
+          "description": "Manually adjust stock level for a product"
+        },
+        {
+          "method": "GET",
+          "path": "/inventory/low-stock",
+          "description": "List all products below reorder threshold"
+        }
+      ],
+      "publishes": [
+        {
+          "event": "inventory.updated",
+          "description": "Emitted when stock level changes for a product"
+        },
+        {
+          "event": "inventory.low-stock",
+          "description": "Emitted when a product's stock falls below the reorder threshold"
+        }
+      ],
+      "accepts": [
+        {
+          "event": "order.placed",
+          "description": "Decrements stock for each product in the order"
+        },
+        {
+          "event": "order.cancelled",
+          "description": "Restores stock for each product in a cancelled order"
+        }
+      ],
+      "dependsOn": [
+        "product-catalog"
+      ]
+    },
+    {
+      "id": "customer",
+      "name": "Customer",
+      "archetype": "http",
+      "tech": "Spring Boot",
+      "purpose": "Owns customer accounts, addresses, preferences, and pet profiles for personalised shopping experiences",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/customers",
+          "description": "Register a new customer account"
+        },
+        {
+          "method": "GET",
+          "path": "/customers/{id}",
+          "description": "Get a customer profile by ID"
+        },
+        {
+          "method": "PUT",
+          "path": "/customers/{id}",
+          "description": "Update customer account details"
+        },
+        {
+          "method": "POST",
+          "path": "/customers/{id}/pets",
+          "description": "Add a pet profile to a customer account"
+        },
+        {
+          "method": "GET",
+          "path": "/customers/{id}/pets",
+          "description": "List all pet profiles for a customer"
+        },
+        {
+          "method": "PUT",
+          "path": "/customers/{id}/pets/{petId}",
+          "description": "Update a pet profile"
+        },
+        {
+          "method": "DELETE",
+          "path": "/customers/{id}/pets/{petId}",
+          "description": "Remove a pet profile"
+        }
+      ],
+      "publishes": [
+        {
+          "event": "customer.registered",
+          "description": "Emitted when a new customer account is created"
+        }
+      ],
+      "accepts": [],
+      "dependsOn": []
+    },
+    {
+      "id": "order",
+      "name": "Order",
+      "archetype": "http",
+      "tech": "Spring Boot",
+      "purpose": "Owns the full order lifecycle from basket through to fulfilment, orchestrating the payment and inventory saga",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/orders",
+          "description": "Place a new order"
+        },
+        {
+          "method": "GET",
+          "path": "/orders/{id}",
+          "description": "Get order details and current status"
+        },
+        {
+          "method": "GET",
+          "path": "/orders/customer/{customerId}",
+          "description": "List all orders for a customer"
+        },
+        {
+          "method": "POST",
+          "path": "/orders/{id}/cancel",
+          "description": "Cancel an order and trigger compensating transactions"
+        }
+      ],
+      "publishes": [
+        {
+          "event": "order.placed",
+          "description": "Emitted when a customer places a new order, triggering the payment and inventory saga"
+        },
+        {
+          "event": "order.confirmed",
+          "description": "Emitted when payment and inventory checks have both succeeded"
+        },
+        {
+          "event": "order.cancelled",
+          "description": "Emitted when an order is cancelled, triggering compensating transactions"
+        },
+        {
+          "event": "order.fulfilled",
+          "description": "Emitted when an order has been fully dispatched"
+        }
+      ],
+      "accepts": [
+        {
+          "event": "payment.charged",
+          "description": "Confirms payment step of the saga, advances order to confirmed state"
+        },
+        {
+          "event": "payment.failed",
+          "description": "Triggers order cancellation and compensating transactions"
+        },
+        {
+          "event": "shipment.dispatched",
+          "description": "Advances order status to fulfilled"
+        }
+      ],
+      "dependsOn": [
+        "customer",
+        "product-catalog",
+        "stripe-provider",
+        "inventory"
+      ]
+    },
+    {
+      "id": "stripe-provider",
+      "name": "StripeProvider",
+      "archetype": "provider",
+      "tech": "Node.js/Express",
+      "purpose": "Wraps the Stripe payments API, exposing charge and refund operations to the ecosystem",
+      "foreignApi": {
+        "name": "Stripe",
+        "baseUrl": "https://api.stripe.com",
+        "auth": "apiKey",
+        "mock": true
+      },
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/charges",
+          "description": "Create a charge against a customer payment method via Stripe"
+        },
+        {
+          "method": "POST",
+          "path": "/refunds",
+          "description": "Issue a refund for a previous charge via Stripe"
+        }
+      ],
+      "publishes": [
+        {
+          "event": "payment.charged",
+          "description": "Emitted when a charge is successfully processed by Stripe"
+        },
+        {
+          "event": "payment.failed",
+          "description": "Emitted when a charge attempt is rejected by Stripe"
+        },
+        {
+          "event": "payment.refunded",
+          "description": "Emitted when a refund is successfully processed by Stripe"
+        }
+      ],
+      "accepts": [],
+      "dependsOn": []
+    },
+    {
+      "id": "shipping",
+      "name": "Shipping",
+      "archetype": "http",
+      "tech": "Spring Boot",
+      "purpose": "Owns shipment creation, fulfilment tracking, and delivery status for all customer orders",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/shipments",
+          "description": "Create a new shipment for a confirmed order"
+        },
+        {
+          "method": "GET",
+          "path": "/shipments/{id}",
+          "description": "Get shipment details and current tracking status"
+        },
+        {
+          "method": "PUT",
+          "path": "/shipments/{id}/dispatch",
+          "description": "Mark a shipment as dispatched"
+        },
+        {
+          "method": "PUT",
+          "path": "/shipments/{id}/deliver",
+          "description": "Mark a shipment as delivered"
+        }
+      ],
+      "publishes": [
+        {
+          "event": "shipment.created",
+          "description": "Emitted when a new shipment record is created for an order"
+        },
+        {
+          "event": "shipment.dispatched",
+          "description": "Emitted when a shipment leaves the warehouse"
+        },
+        {
+          "event": "shipment.delivered",
+          "description": "Emitted when a shipment is confirmed as delivered"
+        }
+      ],
+      "accepts": [
+        {
+          "event": "order.confirmed",
+          "description": "Triggers creation of a new shipment for the confirmed order"
+        }
+      ],
+      "dependsOn": [
+        "order"
+      ]
+    },
+    {
+      "id": "notification",
+      "name": "Notification",
+      "archetype": "messaging",
+      "tech": "Spring Boot",
+      "purpose": "Reacts to domain events and delivers email and SMS notifications to customers, owning no domain data of its own",
+      "endpoints": [],
+      "publishes": [],
+      "accepts": [
+        {
+          "event": "order.placed",
+          "description": "Sends order received confirmation to the customer"
+        },
+        {
+          "event": "order.confirmed",
+          "description": "Sends order confirmed and payment success notification"
+        },
+        {
+          "event": "order.cancelled",
+          "description": "Sends order cancellation notification to the customer"
+        },
+        {
+          "event": "payment.failed",
+          "description": "Sends payment failure notification to the customer"
+        },
+        {
+          "event": "shipment.dispatched",
+          "description": "Sends dispatch notification with tracking details to the customer"
+        },
+        {
+          "event": "shipment.delivered",
+          "description": "Sends delivery confirmation to the customer"
+        },
+        {
+          "event": "inventory.low-stock",
+          "description": "Sends internal alert to operations team for restocking"
+        }
+      ],
+      "dependsOn": [
+        "customer"
+      ]
+    }
+  ]
+}
